@@ -1,0 +1,60 @@
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-west-2
+
+      - name: Create S3 Bucket with Website Configuration
+        run: |
+          aws s3api create-bucket \
+            --bucket jeffkarkariapau.co.uk \
+            --region eu-west-2
+
+          aws s3api put-public-access-block \
+            --bucket jeffkarkariapau.co.uk \
+            --public-access-block-configuration "BlockPublicAcls=false,IgnorePublicAcls=false,BlockPublicPolicy=false,RestrictPublicBuckets=false"
+
+          aws s3api put-bucket-website \
+            --bucket jeffkarkariapau.co.uk \
+            --website-configuration '{
+                "IndexDocument": {
+                    "Suffix": "index.html"
+                }
+            }'
+
+          # Add a bucket policy to allow public read access
+          aws s3api put-bucket-policy \
+            --bucket jeffkarkariapau.co.uk \
+            --policy '{
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Principal": "*",
+                        "Action": "s3:GetObject",
+                        "Resource": "arn:aws:s3:::jeffkarkariapau.co.uk/*"
+                    }
+                ]
+            }'
+            
+      - name: Display Website URL
+        run: |
+          echo "Your website is hosted at https://jeffkarkariapau.co.uk"
+
+      - name: Deploy static site to S3 bucket
+        run: |
+          aws s3 sync ./Website/ s3://jeffkarkariapau.co.uk --delete
